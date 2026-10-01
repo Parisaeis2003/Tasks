@@ -1,0 +1,690 @@
+{
+  "name": "auto direct instagram",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🤖 pbook - پاسخ‌گوی هوشمند دایرکت اینستاگرام (اصلاح‌شده)\n\n### قبل از فعال‌سازی\n- [ ] دو جدول Postgres بساز: `ai_dm_log` و `ai_faq_keywords` (اسکیمای پایین صفحه)\n- [ ] در گره «تایید Webhook متا»، مقدار `hub.verify_token` رو با چیزی که در پنل متا ثبت کردی یکی کن\n- [ ] یک Credential از نوع Header Auth بساز (`Authorization: Bearer <TOKEN>`) و در «ارسال پاسخ به اینستاگرام» انتخابش کن\n- [ ] در گره «پایگاه برداری کتاب‌های pbook»، نام جدول برداری واقعی کتاب‌هات رو وارد کن\n- [ ] پرامپت سیستمی ایجنت رو با لحن دقیق pbook ویرایش کن\n- [ ] ⚠️ قبل از Activate کردن این ورک‌فلو، «دایرکت اینستاگرام ۲» رو غیرفعال کن (تا هر پیام دوبار جواب داده نشه)\n\nمسیر پیام: تایید/دریافت پیام ← بررسی تکراری‌نبودن ← جست‌وجوی پاسخ آماده (FAQ) ← اگر نبود، ایجنت هوشمند با حافظه و جست‌وجوی برداری ← ارسال پاسخ ← ثبت در دیتابیس",
+        "height": 420,
+        "width": 640,
+        "color": 5
+      },
+      "id": "cc44dc95-3888-434d-abf8-d1a9a078ca65",
+      "name": "راهنما",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2272,
+        -960
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## 🗄️ جداول موردنیاز\n\n```sql\nCREATE TABLE ai_dm_log (\n  message_id TEXT PRIMARY KEY,\n  sender_id TEXT,\n  user_message TEXT,\n  ai_reply TEXT,\n  matched_faq BOOLEAN DEFAULT false,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\nCREATE TABLE ai_faq_keywords (\n  id SERIAL PRIMARY KEY,\n  keyword TEXT NOT NULL,\n  reply_text TEXT NOT NULL\n);\n```",
+        "height": 260,
+        "width": 640,
+        "color": 7
+      },
+      "id": "c16a0dae-f008-4abd-a3a1-44323db562d2",
+      "name": "اسکیمای Postgres",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2272,
+        -496
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "path": "60a69a9c-f706-4c52-8a43-8f8b9b341470",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b7d7dcd5-f63a-422b-ae4d-e97a24705da3",
+      "name": "دریافت پیام (تایید Meta - GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1552,
+        -864
+      ],
+      "webhookId": "60a69a9c-f706-4c52-8a43-8f8b9b341470"
+    },
+    {
+      "parameters": {
+        "jsCode": "const query = $input.first().json.query || {};\nconst verifyToken = query['hub.verify_token'];\nconst challenge = query['hub.challenge'];\nconst expectedToken = 'Ztaqavi8277@';\n\nif (verifyToken === expectedToken) {\n  return [{ json: { statusCode: 200, body: challenge } }];\n}\nreturn [{ json: { statusCode: 403, body: 'Verification failed' } }];"
+      },
+      "id": "fc42b062-8c2b-479d-9fcc-a340b8c039e9",
+      "name": "تایید Webhook متا",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1328,
+        -864
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.body }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode }}"
+        }
+      },
+      "id": "e7e50250-93da-4a87-83f4-83fb3294afb5",
+      "name": "پاسخ تایید متا",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -1104,
+        -864
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "60a69a9c-f706-4c52-8a43-8f8b9b341470",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f723c60a-471b-4b1d-8dca-7bce39a3b8ec",
+      "name": "دریافت پیام (رویداد - POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1792,
+        -288
+      ],
+      "webhookId": "d2e6c8a1-5f3b-4a2e-9c1d-7b6a4f0e3c8b"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "EVENT_RECEIVED",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "f9605f60-210a-4190-882a-7da8b02c2f6b",
+      "name": "تایید دریافت فوری",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -1552,
+        -432
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst entries = body.entry || [];\nconst events = [];\n\nfor (const entry of entries) {\n  const messaging = entry.messaging || [];\n  for (const m of messaging) {\n    if (!m.message || m.message.is_echo) continue;\n    events.push({\n      json: {\n        senderId: m.sender ? m.sender.id : null,\n        recipientId: m.recipient ? m.recipient.id : null,\n        messageId: m.message.mid,\n        messageText: (m.message.text || ''),\n        timestamp: m.timestamp\n      }\n    });\n  }\n}\nreturn events;"
+      },
+      "id": "6783b1df-89cf-47b8-b75f-75ac02cc6401",
+      "name": "استخراج پیام از دایرکت",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1552,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*)::int as cnt FROM ai_dm_log WHERE message_id = $1",
+        "options": {
+          "queryReplacement": "={{ $('استخراج پیام از دایرکت').item.json.messageId }}"
+        }
+      },
+      "id": "5d303c27-bbc8-4e84-959f-b27d0e59a14d",
+      "name": "بررسی پاسخ تکراری",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -1328,
+        -272
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "ESXceXAGmut7SFHo",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cnt-zero",
+              "leftValue": "={{ $json.cnt }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "48f10223-0d8b-4acc-bcd8-d6f84470636e",
+      "name": "پیام تکراری نیست؟",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1104,
+        -272
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "a515aa8c-9b7c-473f-bf45-d6d772e395d1",
+      "name": "رد شد - قبلاً پاسخ داده شده",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -1088,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT reply_text FROM ai_faq_keywords WHERE $1 ILIKE '%' || keyword || '%' ORDER BY length(keyword) DESC LIMIT 1",
+        "options": {
+          "queryReplacement": "={{ $('استخراج پیام از دایرکت').item.json.messageText }}"
+        }
+      },
+      "id": "089e166b-9d28-4a9f-9e61-b414463fffae",
+      "name": "جست‌وجوی پاسخ آماده (FAQ)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -864,
+        -416
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "ESXceXAGmut7SFHo",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all();\nif (rows.length > 0 && rows[0].json.reply_text) {\n  return [{ json: { decision: 'faq', replyMessage: rows[0].json.reply_text } }];\n}\nreturn [{ json: { decision: 'ai' } }];"
+      },
+      "id": "fccbb2da-b5b2-48c9-911d-04407c371e1b",
+      "name": "تشخیص تطبیق FAQ",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        -416
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "is-faq",
+              "leftValue": "={{ $json.decision }}",
+              "rightValue": "faq",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7019c27e-0dcf-4d22-9c91-ff60730355e1",
+      "name": "پاسخ آماده پیدا شد؟",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -384,
+        -416
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('استخراج پیام از دایرکت').item.json.messageText }}",
+        "options": {
+          "systemMessage": "تو دستیار پشتیبانی فروشگاه اینترنتی کتاب pbook.shop هستی که منابع کمک‌آموزشی کنکور می‌فروشه. به پیام‌های دایرکت اینستاگرام به فارسی، کوتاه و دوستانه پاسخ بده. برای سوالات درباره‌ی محتوای کتاب‌ها از ابزار جست‌وجوی برداری استفاده کن. اگر اطلاعات دقیقی درباره‌ی قیمت یا موجودی نداری، کاربر رو به وب‌سایت pbook.shop ارجاع بده."
+        }
+      },
+      "id": "042cca7f-7766-49f2-ac29-719d387a5a4e",
+      "name": "ایجنت هوشمند pbook",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -736,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "a25a1d34-174e-463a-bcdd-c9b5cf654e52",
+      "name": "مدل زبانی ایجنت",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -960,
+        144
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "hS8g13vzFTxxJh9A",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('استخراج پیام از دایرکت').item.json.senderId }}",
+        "contextWindowLength": 15
+      },
+      "id": "17a7cf6e-67e0-40a7-8290-bcf3ef20bcc0",
+      "name": "حافظه مکالمه کاربر",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.4,
+      "position": [
+        -800,
+        144
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "ESXceXAGmut7SFHo",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "topK": "={{ $fromAI('Limit', ``, 'number') }}"
+      },
+      "id": "a575dc2a-42fc-49ac-a3e5-1bcc728865a8",
+      "name": "جست‌وجوی هوشمند در کتاب‌ها",
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
+      "typeVersion": 1.1,
+      "position": [
+        -576,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "tableName": "[NAME-OF-YOUR-BOOK-EMBEDDINGS-TABLE]",
+        "options": {}
+      },
+      "id": "57e32672-b413-4b37-9c06-9cd1aa64d6f0",
+      "name": "پایگاه برداری کتاب‌های pbook",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        -640,
+        336
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "ESXceXAGmut7SFHo",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "499c3a5d-123c-4172-b565-b6287ada4361",
+      "name": "امبدینگ متن کتاب‌ها",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -640,
+        528
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "hS8g13vzFTxxJh9A",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "b360939f-3aa3-40aa-afe7-c92857cc7b01",
+      "name": "مدل زبانی ابزار جست‌وجو",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -272,
+        304
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "hS8g13vzFTxxJh9A",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v19.0/{{ $('استخراج پیام از دایرکت').item.json.recipientId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": { \"id\": \"{{ $('استخراج پیام از دایرکت').item.json.senderId }}\" },\n  \"message\": { \"text\": \"{{ $json.replyMessage || $json.output }}\" }\n}",
+        "options": {}
+      },
+      "id": "612c4e4f-42ef-4a9a-b39f-224b55f8228c",
+      "name": "ارسال پاسخ به اینستاگرام",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -96,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "ai_dm_log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $('استخراج پیام از دایرکت').item.json.messageId }}",
+            "sender_id": "={{ $('استخراج پیام از دایرکت').item.json.senderId }}",
+            "user_message": "={{ $('استخراج پیام از دایرکت').item.json.messageText }}",
+            "ai_reply": "={{ $json.replyMessage || $json.output }}",
+            "matched_faq": "={{ $('پاسخ آماده پیدا شد؟').item.json.decision === 'faq' }}"
+          },
+          "matchingColumns": []
+        },
+        "options": {}
+      },
+      "id": "20b4a2bc-5300-4f0c-8b32-9b768f78d4d7",
+      "name": "ثبت گفتگو در دیتابیس",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        128,
+        -272
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "ESXceXAGmut7SFHo",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "دریافت پیام (تایید Meta - GET)": {
+      "main": [
+        [
+          {
+            "node": "تایید Webhook متا",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "تایید Webhook متا": {
+      "main": [
+        [
+          {
+            "node": "پاسخ تایید متا",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "دریافت پیام (رویداد - POST)": {
+      "main": [
+        [
+          {
+            "node": "تایید دریافت فوری",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "استخراج پیام از دایرکت",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "استخراج پیام از دایرکت": {
+      "main": [
+        [
+          {
+            "node": "بررسی پاسخ تکراری",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "بررسی پاسخ تکراری": {
+      "main": [
+        [
+          {
+            "node": "پیام تکراری نیست؟",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "پیام تکراری نیست؟": {
+      "main": [
+        [
+          {
+            "node": "جست‌وجوی پاسخ آماده (FAQ)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "رد شد - قبلاً پاسخ داده شده",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "جست‌وجوی پاسخ آماده (FAQ)": {
+      "main": [
+        [
+          {
+            "node": "تشخیص تطبیق FAQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "تشخیص تطبیق FAQ": {
+      "main": [
+        [
+          {
+            "node": "پاسخ آماده پیدا شد؟",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "پاسخ آماده پیدا شد؟": {
+      "main": [
+        [
+          {
+            "node": "ارسال پاسخ به اینستاگرام",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ایجنت هوشمند pbook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ایجنت هوشمند pbook": {
+      "main": [
+        [
+          {
+            "node": "ارسال پاسخ به اینستاگرام",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ارسال پاسخ به اینستاگرام": {
+      "main": [
+        [
+          {
+            "node": "ثبت گفتگو در دیتابیس",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "مدل زبانی ایجنت": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "ایجنت هوشمند pbook",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "حافظه مکالمه کاربر": {
+      "ai_memory": [
+        [
+          {
+            "node": "ایجنت هوشمند pbook",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "جست‌وجوی هوشمند در کتاب‌ها": {
+      "ai_tool": [
+        [
+          {
+            "node": "ایجنت هوشمند pbook",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "پایگاه برداری کتاب‌های pbook": {
+      "ai_vectorStore": [
+        [
+          {
+            "node": "جست‌وجوی هوشمند در کتاب‌ها",
+            "type": "ai_vectorStore",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "امبدینگ متن کتاب‌ها": {
+      "ai_embedding": [
+        [
+          {
+            "node": "پایگاه برداری کتاب‌های pbook",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "مدل زبانی ابزار جست‌وجو": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "جست‌وجوی هوشمند در کتاب‌ها",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "ccb0e295-9f1e-4fc0-b5e8-c5a51dbb31af",
+  "meta": {
+    "templateId": "rag-starter-template",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "542a52c546c2ca7892d04a196c24d90d70822f67320a1bd10244214a262e763c"
+  },
+  "nodeGroups": [],
+  "id": "v1B4Qsd4TOVIrhNa",
+  "tags": []
+}
